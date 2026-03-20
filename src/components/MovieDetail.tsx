@@ -12,15 +12,17 @@ import {
   Film,
   Users,
   TrendingUp,
+  PlayCircle,
 } from "lucide-react";
 import {
   getMovieDetails,
   getMovieCredits,
+  getMovieVideos,
   getImageUrl,
   getBackdropUrl,
   getSimilarMovies,
 } from "@/lib/tmdb";
-import type { MovieDetails, Credits, Movie } from "@/types/movie";
+import type { MovieDetails, Credits, Movie, Video } from "@/types/movie";
 import { MovieList } from "./MovieList";
 
 interface MovieDetailProps {
@@ -33,6 +35,7 @@ export function MovieDetail({ movieId, onBack, onMovieClick }: MovieDetailProps)
   const [movie, setMovie] = useState<MovieDetails | null>(null);
   const [credits, setCredits] = useState<Credits | null>(null);
   const [similarMovies, setSimilarMovies] = useState<Movie[]>([]);
+  const [trailer, setTrailer] = useState<Video | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,13 +44,26 @@ export function MovieDetail({ movieId, onBack, onMovieClick }: MovieDetailProps)
       setIsLoading(true);
       setError(null);
       try {
-        const [movieData, creditsData, similarData] = await Promise.all([
+        const [movieData, creditsData, videosData, similarData] = await Promise.all([
           getMovieDetails(movieId),
           getMovieCredits(movieId),
+          getMovieVideos(movieId),
           getSimilarMovies(movieId),
         ]);
         setMovie(movieData);
         setCredits(creditsData);
+        const preferredTrailer =
+          videosData.results.find(
+            (video) =>
+              video.site === "YouTube" &&
+              video.type === "Trailer" &&
+              video.official
+          ) ||
+          videosData.results.find(
+            (video) => video.site === "YouTube" && video.type === "Trailer"
+          ) ||
+          videosData.results.find((video) => video.site === "YouTube");
+        setTrailer(preferredTrailer ?? null);
         setSimilarMovies(similarData.results.slice(0, 6));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load movie details");
@@ -120,6 +136,9 @@ export function MovieDetail({ movieId, onBack, onMovieClick }: MovieDetailProps)
 
   const director = credits?.crew.find((person) => person.job === "Director");
   const mainCast = credits?.cast.slice(0, 6) || [];
+  const trailerUrl = trailer
+    ? `https://www.youtube.com/embed/${trailer.key}?rel=0&modestbranding=1`
+    : null;
 
   return (
     <div className="min-h-screen pb-12">
@@ -213,6 +232,40 @@ export function MovieDetail({ movieId, onBack, onMovieClick }: MovieDetailProps)
               <p className="text-muted-foreground leading-relaxed">
                 {movie.overview || "No overview available."}
               </p>
+            </div>
+
+            {/* Trailer */}
+            <div>
+              <h2 className="mb-3 flex items-center gap-2 text-xl font-semibold">
+                <PlayCircle className="h-5 w-5 text-primary" />
+                Trailer
+              </h2>
+              {trailerUrl ? (
+                <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                  <div className="aspect-video w-full">
+                    <iframe
+                      src={trailerUrl}
+                      title={`${movie.title} trailer`}
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              ) : (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                    <PlayCircle className="h-10 w-10 text-muted-foreground/50" />
+                    <div>
+                      <p className="font-medium">Trailer not available</p>
+                      <p className="text-sm text-muted-foreground">
+                        TMDB does not have a playable trailer for this movie yet.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Additional Info */}
